@@ -98,7 +98,14 @@ impl Iterator for CustomerArrow {
             return None;
         }
 
-        let c_custkey = Int64Array::from_iter_values(rows.iter().map(|r| r.c_custkey as i64));
+        let c_custkey: ArrayRef = match self.column_type_config.custkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|r| r.c_custkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|r| r.c_custkey as i64),
+            )),
+        };
         let c_name = string_view_array_from_display_iter(rows.iter().map(|r| r.c_name));
         let c_address = string_view_array_from_display_iter(rows.iter().map(|r| &r.c_address));
 
@@ -130,7 +137,7 @@ impl Iterator for CustomerArrow {
         let batch = RecordBatch::try_new(
             Arc::clone(self.schema()),
             vec![
-                Arc::new(c_custkey),
+                c_custkey,
                 Arc::new(c_name),
                 Arc::new(c_address),
                 c_nationkey,
@@ -146,6 +153,10 @@ impl Iterator for CustomerArrow {
 }
 
 fn make_customer_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let custkey_type = match config.custkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let nationkey_type = match config.nationkey_type {
         KeyColumnType::I32 => DataType::Int32,
         KeyColumnType::I64 => DataType::Int64,
@@ -156,7 +167,7 @@ fn make_customer_schema(config: &ColumnTypeConfig) -> SchemaRef {
     };
 
     Arc::new(Schema::new(vec![
-        Field::new("c_custkey", DataType::Int64, false),
+        Field::new("c_custkey", custkey_type, false),
         Field::new("c_name", DataType::Utf8View, false),
         Field::new("c_address", DataType::Utf8View, false),
         Field::new("c_nationkey", nationkey_type, false),

@@ -3,7 +3,8 @@ use crate::conversions::{
     to_arrow_timestamp_ms,
 };
 use crate::{
-    ColumnTypeConfig, DEFAULT_BATCH_SIZE, DateColumnType, DecimalColumnType, RecordBatchIterator,
+    ColumnTypeConfig, DEFAULT_BATCH_SIZE, DateColumnType, DecimalColumnType, KeyColumnType,
+    RecordBatchIterator,
 };
 use arrow::array::{
     ArrayRef, Date32Array, Float64Array, Int32Array, Int64Array, RecordBatch, StringViewArray,
@@ -105,7 +106,14 @@ impl Iterator for OrderArrow {
         }
 
         let o_orderkey = Int64Array::from_iter_values(rows.iter().map(|r| r.o_orderkey as i64));
-        let o_custkey = Int64Array::from_iter_values(rows.iter().map(|r| r.o_custkey as i64));
+        let o_custkey: ArrayRef = match self.column_type_config.custkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|r| r.o_custkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|r| r.o_custkey as i64),
+            )),
+        };
         let o_orderstatus =
             string_view_array_from_display_iter(rows.iter().map(|r| r.o_orderstatus));
 
@@ -139,7 +147,7 @@ impl Iterator for OrderArrow {
             Arc::clone(self.schema()),
             vec![
                 Arc::new(o_orderkey),
-                Arc::new(o_custkey),
+                o_custkey,
                 Arc::new(o_orderstatus),
                 o_totalprice,
                 o_orderdate,
@@ -155,6 +163,10 @@ impl Iterator for OrderArrow {
 }
 
 fn make_order_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let custkey_type = match config.custkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let totalprice_type = match config.decimal_type {
         DecimalColumnType::F64 => DataType::Float64,
         DecimalColumnType::Decimal128 => DataType::Decimal128(15, 2),
@@ -168,7 +180,7 @@ fn make_order_schema(config: &ColumnTypeConfig) -> SchemaRef {
 
     Arc::new(Schema::new(vec![
         Field::new("o_orderkey", DataType::Int64, false),
-        Field::new("o_custkey", DataType::Int64, false),
+        Field::new("o_custkey", custkey_type, false),
         Field::new("o_orderstatus", DataType::Utf8View, false),
         Field::new("o_totalprice", totalprice_type, false),
         Field::new("o_orderdate", date_type, false),

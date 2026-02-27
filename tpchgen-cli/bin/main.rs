@@ -181,17 +181,41 @@ struct Cli {
     ///
     /// Controls the Arrow type for: c_nationkey, n_nationkey, s_nationkey
     ///
-    /// Valid values: i64 (default), i32
-    #[arg(long, default_value = "i64")]
+    /// Valid values: i32 (default), i64
+    #[arg(long, default_value = "i32")]
     nationkey_type: KeyColumnType,
 
     /// Type to use for regionkey columns.
     ///
     /// Controls the Arrow type for: n_regionkey, r_regionkey
     ///
-    /// Valid values: i64 (default), i32
-    #[arg(long, default_value = "i64")]
+    /// Valid values: i32 (default), i64
+    #[arg(long, default_value = "i32")]
     regionkey_type: KeyColumnType,
+
+    /// Type to use for custkey columns.
+    ///
+    /// Controls the Arrow type for: c_custkey, o_custkey
+    ///
+    /// Valid values: i32 (default), i64
+    #[arg(long, default_value = "i32")]
+    custkey_type: KeyColumnType,
+
+    /// Type to use for partkey columns.
+    ///
+    /// Controls the Arrow type for: p_partkey, ps_partkey, l_partkey
+    ///
+    /// Valid values: i32 (default), i64
+    #[arg(long, default_value = "i32")]
+    partkey_type: KeyColumnType,
+
+    /// Type to use for suppkey columns.
+    ///
+    /// Controls the Arrow type for: s_suppkey, ps_suppkey, l_suppkey
+    ///
+    /// Valid values: i32 (default), i64
+    #[arg(long, default_value = "i32")]
+    suppkey_type: KeyColumnType,
 
     /// Parquet format version to write.
     ///
@@ -364,6 +388,9 @@ impl Cli {
             date_type: self.date_column_type,
             nationkey_type: self.nationkey_type,
             regionkey_type: self.regionkey_type,
+            custkey_type: self.custkey_type,
+            partkey_type: self.partkey_type,
+            suppkey_type: self.suppkey_type,
         };
 
         // Convert column encoding overrides from Vec<(String, Encoding)> to HashMap

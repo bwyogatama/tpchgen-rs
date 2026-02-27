@@ -1,6 +1,7 @@
 use crate::conversions::{decimal128_array_from_iter, to_arrow_date32, to_arrow_timestamp_ms};
 use crate::{
-    ColumnTypeConfig, DEFAULT_BATCH_SIZE, DateColumnType, DecimalColumnType, RecordBatchIterator,
+    ColumnTypeConfig, DEFAULT_BATCH_SIZE, DateColumnType, DecimalColumnType, KeyColumnType,
+    RecordBatchIterator,
 };
 use arrow::array::{
     ArrayRef, Date32Array, Float64Array, Int32Array, Int64Array, RecordBatch, StringViewArray,
@@ -109,8 +110,22 @@ impl Iterator for LineItemArrow {
 
         // Convert column by column
         let l_orderkey = Int64Array::from_iter_values(rows.iter().map(|row| row.l_orderkey as i64));
-        let l_partkey = Int64Array::from_iter_values(rows.iter().map(|row| row.l_partkey as i64));
-        let l_suppkey = Int64Array::from_iter_values(rows.iter().map(|row| row.l_suppkey as i64));
+        let l_partkey: ArrayRef = match self.column_type_config.partkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|row| row.l_partkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|row| row.l_partkey as i64),
+            )),
+        };
+        let l_suppkey: ArrayRef = match self.column_type_config.suppkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|row| row.l_suppkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|row| row.l_suppkey as i64),
+            )),
+        };
         let l_linenumber = Int32Array::from_iter_values(rows.iter().map(|row| row.l_linenumber));
 
         // Build the decimal/float columns based on config
@@ -196,8 +211,8 @@ impl Iterator for LineItemArrow {
             Arc::clone(self.schema()),
             vec![
                 Arc::new(l_orderkey),
-                Arc::new(l_partkey),
-                Arc::new(l_suppkey),
+                l_partkey,
+                l_suppkey,
                 Arc::new(l_linenumber),
                 l_quantity,
                 l_extended_price,
@@ -220,6 +235,14 @@ impl Iterator for LineItemArrow {
 }
 
 fn make_lineitem_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let partkey_type = match config.partkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
+    let suppkey_type = match config.suppkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let decimal_type = match config.decimal_type {
         DecimalColumnType::F64 => DataType::Float64,
         DecimalColumnType::Decimal128 => DataType::Decimal128(15, 2),
@@ -233,8 +256,8 @@ fn make_lineitem_schema(config: &ColumnTypeConfig) -> SchemaRef {
 
     Arc::new(Schema::new(vec![
         Field::new("l_orderkey", DataType::Int64, false),
-        Field::new("l_partkey", DataType::Int64, false),
-        Field::new("l_suppkey", DataType::Int64, false),
+        Field::new("l_partkey", partkey_type, false),
+        Field::new("l_suppkey", suppkey_type, false),
         Field::new("l_linenumber", DataType::Int32, false),
         Field::new("l_quantity", decimal_type.clone(), false),
         Field::new("l_extendedprice", decimal_type.clone(), false),

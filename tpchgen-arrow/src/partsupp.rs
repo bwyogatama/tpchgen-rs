@@ -1,5 +1,5 @@
 use crate::conversions::{decimal128_array_from_iter, string_view_array_from_display_iter};
-use crate::{ColumnTypeConfig, DEFAULT_BATCH_SIZE, DecimalColumnType, RecordBatchIterator};
+use crate::{ColumnTypeConfig, DEFAULT_BATCH_SIZE, DecimalColumnType, KeyColumnType, RecordBatchIterator};
 use arrow::array::{ArrayRef, Float64Array, Int32Array, Int64Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use std::sync::Arc;
@@ -96,8 +96,22 @@ impl Iterator for PartSuppArrow {
             return None;
         }
 
-        let ps_partkey = Int64Array::from_iter_values(rows.iter().map(|r| r.ps_partkey as i64));
-        let ps_suppkey = Int64Array::from_iter_values(rows.iter().map(|r| r.ps_suppkey as i64));
+        let ps_partkey: ArrayRef = match self.column_type_config.partkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|r| r.ps_partkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|r| r.ps_partkey as i64),
+            )),
+        };
+        let ps_suppkey: ArrayRef = match self.column_type_config.suppkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|r| r.ps_suppkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|r| r.ps_suppkey as i64),
+            )),
+        };
         let ps_availqty = Int32Array::from_iter_values(rows.iter().map(|r| r.ps_availqty));
 
         // Build ps_supplycost based on config
@@ -115,8 +129,8 @@ impl Iterator for PartSuppArrow {
         let batch = RecordBatch::try_new(
             Arc::clone(self.schema()),
             vec![
-                Arc::new(ps_partkey),
-                Arc::new(ps_suppkey),
+                ps_partkey,
+                ps_suppkey,
                 Arc::new(ps_availqty),
                 ps_supplycost,
                 Arc::new(ps_comment),
@@ -128,14 +142,22 @@ impl Iterator for PartSuppArrow {
 }
 
 fn make_partsupp_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let partkey_type = match config.partkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
+    let suppkey_type = match config.suppkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let supplycost_type = match config.decimal_type {
         DecimalColumnType::F64 => DataType::Float64,
         DecimalColumnType::Decimal128 => DataType::Decimal128(15, 2),
     };
 
     Arc::new(Schema::new(vec![
-        Field::new("ps_partkey", DataType::Int64, false),
-        Field::new("ps_suppkey", DataType::Int64, false),
+        Field::new("ps_partkey", partkey_type, false),
+        Field::new("ps_suppkey", suppkey_type, false),
         Field::new("ps_availqty", DataType::Int32, false),
         Field::new("ps_supplycost", supplycost_type, false),
         Field::new("ps_comment", DataType::Utf8View, false),

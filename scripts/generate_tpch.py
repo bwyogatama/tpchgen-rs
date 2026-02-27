@@ -230,9 +230,20 @@ def generate_partition(
 
     print(f"  Generating partition {part} of {num_parts} for {table}...")
 
+    # Resolve tpchgen-cli binary: prefer release build relative to this script, fall back to PATH
+    _repo_root = Path(__file__).parent.parent
+    _cli_release = _repo_root / "target" / "release" / "tpchgen-cli"
+    _cli_debug = _repo_root / "target" / "debug" / "tpchgen-cli"
+    if _cli_release.exists():
+        _cli_bin = str(_cli_release)
+    elif _cli_debug.exists():
+        _cli_bin = str(_cli_debug)
+    else:
+        _cli_bin = "tpchgen-cli"  # fall back to PATH
+
     # Build the command with optional flags
     cmd = [
-        "tpchgen-cli",
+        _cli_bin,
         "-s",
         str(scale),
         "--tables",

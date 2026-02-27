@@ -28,6 +28,81 @@ Blazing fast [TPCH] benchmark data generator, in pure Rust with zero dependencie
 
 The easiest way to use this software is via the [`tpchgen-cli`] tool.
 
+## Generating Data
+
+### 1. Set up the environment
+
+Install [pixi], then run `pixi install` to set up Rust 1.89.0, Python, and `pyarrow` in one step:
+
+```shell
+curl -fsSL https://pixi.sh/install.sh | bash
+pixi install
+pixi shell
+```
+
+[pixi]: https://pixi.sh
+
+### 2. Build `tpchgen-cli`
+
+```shell
+RUSTFLAGS='-C target-cpu=native' cargo build --release -p tpchgen-cli
+```
+
+Add the binary to your `PATH`:
+
+```shell
+export PATH="$PWD/target/release:$PATH"
+```
+
+### 3. Generate data
+
+Use `scripts/generate_tpch.py` to generate a full dataset with GPU-optimized partition sizes,
+encodings, and compression settings:
+
+```shell
+python scripts/generate_tpch.py -s <SCALE_FACTOR> -f parquet -j <PARALLELISM> -o <OUTPUT_DIR>
+```
+
+For example, to generate scale factor 100 using 16 parallel jobs:
+
+```shell
+python scripts/generate_tpch.py -s 100 -f parquet -j 16 -o tpch-sf100
+```
+
+Key options:
+
+| Option | Description | Default |
+| ------ | ----------- | ------- |
+| `-s` | Scale factor (integer) | `1000` |
+| `-f` | Output format: `parquet` or `tbl` | `parquet` |
+| `-o` | Output directory | `tpch-data` |
+| `-j` | Number of parallel jobs | number of CPU threads |
+| `--parquet-row-group-bytes N` | Override row group size in bytes for all tables | per-table defaults |
+| `--use-upstream-compression` | Compress all columns (default skips incompressible ones) | off |
+| `--use-float-type` | Use `f64` for decimal columns instead of `decimal128` | off |
+| `--use-timestamp-type` | Use `timestamp_ms` for date columns instead of `date32` | off |
+| `--use-large-ids` | Use `i64` for `nationkey`/`regionkey` instead of `i32` | off |
+
+The script writes each table into its own subdirectory as zero-indexed partition files:
+
+```
+tpch-sf100/
+├── customer/
+│   └── part.0.parquet
+├── lineitem/
+│   ├── part.0.parquet
+│   ├── part.1.parquet
+│   └── part.2.parquet   (6 files at SF=100)
+├── orders/
+│   ├── part.0.parquet
+│   └── part.1.parquet   (2 files at SF=100)
+└── ...
+```
+
+A `metadata.json` file is written to the output directory summarising the schema, row counts,
+file sizes, and encodings of every generated table. See [scripts/README.md](scripts/README.md)
+for full details on the partition sizing formula and all available options.
+
 ## Performance
 
 [`tpchgen-cli`] is more than 10x faster than the next fastest TPCH generator we

@@ -1,5 +1,5 @@
 use crate::conversions::{decimal128_array_from_iter, string_view_array_from_display_iter};
-use crate::{ColumnTypeConfig, DEFAULT_BATCH_SIZE, DecimalColumnType, RecordBatchIterator};
+use crate::{ColumnTypeConfig, DEFAULT_BATCH_SIZE, DecimalColumnType, KeyColumnType, RecordBatchIterator};
 use arrow::array::{ArrayRef, Float64Array, Int32Array, Int64Array, RecordBatch, StringViewArray};
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use std::sync::Arc;
@@ -96,7 +96,14 @@ impl Iterator for PartArrow {
             return None;
         }
 
-        let p_partkey = Int64Array::from_iter_values(rows.iter().map(|r| r.p_partkey as i64));
+        let p_partkey: ArrayRef = match self.column_type_config.partkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|r| r.p_partkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|r| r.p_partkey as i64),
+            )),
+        };
         let p_name = string_view_array_from_display_iter(rows.iter().map(|r| &r.p_name));
         let p_mfgr = string_view_array_from_display_iter(rows.iter().map(|r| r.p_mfgr));
         let p_brand = string_view_array_from_display_iter(rows.iter().map(|r| r.p_brand));
@@ -119,7 +126,7 @@ impl Iterator for PartArrow {
         let batch = RecordBatch::try_new(
             Arc::clone(self.schema()),
             vec![
-                Arc::new(p_partkey),
+                p_partkey,
                 Arc::new(p_name),
                 Arc::new(p_mfgr),
                 Arc::new(p_brand),
@@ -136,13 +143,17 @@ impl Iterator for PartArrow {
 }
 
 fn make_part_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let partkey_type = match config.partkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let retailprice_type = match config.decimal_type {
         DecimalColumnType::F64 => DataType::Float64,
         DecimalColumnType::Decimal128 => DataType::Decimal128(15, 2),
     };
 
     Arc::new(Schema::new(vec![
-        Field::new("p_partkey", DataType::Int64, false),
+        Field::new("p_partkey", partkey_type, false),
         Field::new("p_name", DataType::Utf8View, false),
         Field::new("p_mfgr", DataType::Utf8View, false),
         Field::new("p_brand", DataType::Utf8View, false),

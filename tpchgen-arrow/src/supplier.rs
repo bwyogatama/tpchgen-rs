@@ -85,7 +85,14 @@ impl Iterator for SupplierArrow {
             return None;
         }
 
-        let s_suppkey = Int64Array::from_iter_values(rows.iter().map(|r| r.s_suppkey as i64));
+        let s_suppkey: ArrayRef = match self.column_type_config.suppkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
+                rows.iter().map(|r| r.s_suppkey as i32),
+            )),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|r| r.s_suppkey as i64),
+            )),
+        };
         let s_name = string_view_array_from_display_iter(rows.iter().map(|r| r.s_name));
         let s_address = string_view_array_from_display_iter(rows.iter().map(|r| &r.s_address));
 
@@ -116,7 +123,7 @@ impl Iterator for SupplierArrow {
         let batch = RecordBatch::try_new(
             Arc::clone(self.schema()),
             vec![
-                Arc::new(s_suppkey),
+                s_suppkey,
                 Arc::new(s_name),
                 Arc::new(s_address),
                 s_nationkey,
@@ -131,6 +138,10 @@ impl Iterator for SupplierArrow {
 }
 
 fn make_supplier_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let suppkey_type = match config.suppkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let nationkey_type = match config.nationkey_type {
         KeyColumnType::I32 => DataType::Int32,
         KeyColumnType::I64 => DataType::Int64,
@@ -141,7 +152,7 @@ fn make_supplier_schema(config: &ColumnTypeConfig) -> SchemaRef {
     };
 
     Arc::new(Schema::new(vec![
-        Field::new("s_suppkey", DataType::Int64, false),
+        Field::new("s_suppkey", suppkey_type, false),
         Field::new("s_name", DataType::Utf8View, false),
         Field::new("s_address", DataType::Utf8View, false),
         Field::new("s_nationkey", nationkey_type, false),

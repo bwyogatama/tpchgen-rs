@@ -133,15 +133,14 @@ impl FromStr for DateColumnType {
     }
 }
 
-/// Type to use for nation and region key columns.
-///
-/// These tables do not scale with the scale factor, and so
-/// can fit in an Int32.
+/// Type to use for key columns.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum KeyColumnType {
+    /// Use Int32 for key columns (default)
     #[default]
-    I64,
     I32,
+    /// Use Int64 for key columns
+    I64,
 }
 
 impl fmt::Display for KeyColumnType {
@@ -173,8 +172,10 @@ impl FromStr for KeyColumnType {
 /// This allows customizing the Arrow types used for specific column categories:
 /// - Decimal columns (monetary values like prices, account balances)
 /// - Date columns (order dates, ship dates, etc.)
-/// - Nation key columns (foreign keys to nation table)
-/// - Region key columns (foreign keys to region table)
+/// - Key columns (primary and foreign keys)
+///
+/// By default all key columns use Int32, except `l_orderkey` and `o_orderkey`
+/// which are always Int64.
 ///
 /// # Example
 /// ```
@@ -185,6 +186,9 @@ impl FromStr for KeyColumnType {
 ///     date_type: DateColumnType::TimestampMs,
 ///     nationkey_type: KeyColumnType::I32,
 ///     regionkey_type: KeyColumnType::I32,
+///     custkey_type: KeyColumnType::I32,
+///     partkey_type: KeyColumnType::I32,
+///     suppkey_type: KeyColumnType::I32,
 /// };
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -197,6 +201,12 @@ pub struct ColumnTypeConfig {
     pub nationkey_type: KeyColumnType,
     /// Type for regionkey columns (n_regionkey, r_regionkey)
     pub regionkey_type: KeyColumnType,
+    /// Type for custkey columns (c_custkey, o_custkey)
+    pub custkey_type: KeyColumnType,
+    /// Type for partkey columns (p_partkey, ps_partkey, l_partkey)
+    pub partkey_type: KeyColumnType,
+    /// Type for suppkey columns (s_suppkey, ps_suppkey, l_suppkey)
+    pub suppkey_type: KeyColumnType,
 }
 
 /// Iterator of Arrow [`RecordBatch`] that also knows its schema
@@ -215,6 +225,9 @@ pub trait RecordBatchIterator: Iterator<Item = RecordBatch> + Send {
     /// - date_type: Controls date columns (l_shipdate, l_commitdate, l_receiptdate, o_orderdate)
     /// - nationkey_type: Controls nationkey columns (c_nationkey, n_nationkey, s_nationkey)
     /// - regionkey_type: Controls regionkey columns (n_regionkey, r_regionkey)
+    /// - custkey_type: Controls custkey columns (c_custkey, o_custkey)
+    /// - partkey_type: Controls partkey columns (p_partkey, ps_partkey, l_partkey)
+    /// - suppkey_type: Controls suppkey columns (s_suppkey, ps_suppkey, l_suppkey)
     fn with_column_type_config(self, config: ColumnTypeConfig) -> Self
     where
         Self: Sized;
