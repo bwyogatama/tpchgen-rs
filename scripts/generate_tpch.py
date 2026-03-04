@@ -303,7 +303,7 @@ def generate_partition(
 
     # The file will be named table/table.1.format in the temp directory
     src_file = temp_dir / table / f"{table}.{part}.{format}"
-    dst_file = table_dir / f"part.{part - 1}.{format}"
+    dst_file = table_dir / f"{table}.{part - 1}.{format}"
 
     shutil.move(str(src_file), str(dst_file))
     shutil.rmtree(temp_dir)
