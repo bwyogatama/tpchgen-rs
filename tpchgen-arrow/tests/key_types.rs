@@ -14,14 +14,70 @@ use tpchgen_arrow::{
 #[test]
 fn matching_key_types_across_tables_and_partitions() {
     // Each key family widens independently at the first integer scale that exceeds Int32.
-    for (scale, cust, part, supp) in [
-        (1.0, DataType::Int32, DataType::Int32, DataType::Int32),
-        (10737.0, DataType::Int32, DataType::Int32, DataType::Int32),
-        (10738.0, DataType::Int32, DataType::Int64, DataType::Int32),
-        (14316.0, DataType::Int32, DataType::Int64, DataType::Int32),
-        (14317.0, DataType::Int64, DataType::Int64, DataType::Int32),
-        (214748.0, DataType::Int64, DataType::Int64, DataType::Int32),
-        (214749.0, DataType::Int64, DataType::Int64, DataType::Int64),
+    for (scale, order_type, cust, part, supp) in [
+        (
+            1.0,
+            DataType::Int32,
+            DataType::Int32,
+            DataType::Int32,
+            DataType::Int32,
+        ),
+        (
+            357.0,
+            DataType::Int32,
+            DataType::Int32,
+            DataType::Int32,
+            DataType::Int32,
+        ),
+        (
+            358.0,
+            DataType::Int64,
+            DataType::Int32,
+            DataType::Int32,
+            DataType::Int32,
+        ),
+        (
+            10737.0,
+            DataType::Int64,
+            DataType::Int32,
+            DataType::Int32,
+            DataType::Int32,
+        ),
+        (
+            10738.0,
+            DataType::Int64,
+            DataType::Int32,
+            DataType::Int64,
+            DataType::Int32,
+        ),
+        (
+            14316.0,
+            DataType::Int64,
+            DataType::Int32,
+            DataType::Int64,
+            DataType::Int32,
+        ),
+        (
+            14317.0,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Int32,
+        ),
+        (
+            214748.0,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Int32,
+        ),
+        (
+            214749.0,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Int64,
+            DataType::Int64,
+        ),
     ] {
         // An early partition must use the same widths as the end of the dataset.
         for partition in [1, 1000] {
@@ -38,7 +94,7 @@ fn matching_key_types_across_tables_and_partitions() {
                 ),
                 (
                     &order,
-                    vec![("o_custkey", &cust), ("o_orderkey", &DataType::Int64)],
+                    vec![("o_custkey", &cust), ("o_orderkey", &order_type)],
                 ),
                 (&part_gen, vec![("p_partkey", &part)]),
                 (&supplier, vec![("s_suppkey", &supp)]),
@@ -51,7 +107,7 @@ fn matching_key_types_across_tables_and_partitions() {
                     vec![
                         ("l_partkey", &part),
                         ("l_suppkey", &supp),
-                        ("l_orderkey", &DataType::Int64),
+                        ("l_orderkey", &order_type),
                     ],
                 ),
             ] {
@@ -132,10 +188,68 @@ primary_key_boundary!(
 );
 
 #[test]
+fn order_keys_widen_at_the_sparse_key_boundary() {
+    // Consecutive order indices jump across Int32's maximum because of the key gaps.
+    for (order_count, maximum, expected) in [
+        (536_870_910, 2_147_483_622, DataType::Int32),
+        (536_870_911, 2_147_483_623, DataType::Int32),
+        (536_870_912, 2_147_483_648, DataType::Int64),
+    ] {
+        let scale = (order_count as f64 + 0.25) / 1_500_000.0;
+        assert_eq!(
+            OrderGenerator::calculate_row_count(scale, 1, 1),
+            order_count as i64
+        );
+        for partition in [1, order_count] {
+            let generators: Vec<Box<dyn RecordBatchIterator>> = vec![
+                Box::new(
+                    OrderArrow::new(OrderGenerator::new(scale, partition, order_count))
+                        .with_column_type_config(ColumnTypeConfig::default())
+                        .with_batch_size(1),
+                ),
+                Box::new(
+                    LineItemArrow::new(LineItemGenerator::new(scale, partition, order_count))
+                        .with_column_type_config(ColumnTypeConfig::default())
+                        .with_batch_size(1),
+                ),
+            ];
+            for generator in generators {
+                let schema = generator.schema().clone();
+                assert_eq!(schema.field(0).data_type(), &expected);
+                let expected_key = if partition == 1 { 1 } else { maximum };
+                let mut row_count = 0;
+                for batch in generator {
+                    assert_eq!(batch.schema(), schema);
+                    let key = match expected {
+                        DataType::Int32 => batch
+                            .column(0)
+                            .as_any()
+                            .downcast_ref::<Int32Array>()
+                            .unwrap()
+                            .value(0) as i64,
+                        DataType::Int64 => batch
+                            .column(0)
+                            .as_any()
+                            .downcast_ref::<Int64Array>()
+                            .unwrap()
+                            .value(0),
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(key, expected_key);
+                    row_count += batch.num_rows();
+                }
+                assert!((1..=7).contains(&row_count));
+            }
+        }
+    }
+}
+
+#[test]
 fn explicit_i64_stays_i64_and_i32_cannot_overflow() {
     for requested in [KeyColumnType::I32, KeyColumnType::I64] {
         for scale in [1.0, 214749.0] {
             let config = ColumnTypeConfig {
+                orderkey_type: requested,
                 custkey_type: requested,
                 partkey_type: requested,
                 suppkey_type: requested,
@@ -177,7 +291,7 @@ fn explicit_i64_stays_i64_and_i32_cannot_overflow() {
                 let batch = generator.next().unwrap();
                 assert_eq!(batch.schema(), schema);
                 for field in schema.fields() {
-                    if ["custkey", "partkey", "suppkey"]
+                    if ["orderkey", "custkey", "partkey", "suppkey"]
                         .iter()
                         .any(|suffix| field.name().ends_with(suffix))
                     {

@@ -113,7 +113,14 @@ impl Iterator for LineItemArrow {
         }
 
         // Convert column by column
-        let l_orderkey = Int64Array::from_iter_values(rows.iter().map(|row| row.l_orderkey as i64));
+        let l_orderkey: ArrayRef = match self.column_type_config.orderkey_type {
+            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(rows.iter().map(|row| {
+                i32::try_from(row.l_orderkey).expect("key exceeds resolved Int32 range")
+            }))),
+            KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
+                rows.iter().map(|row| row.l_orderkey),
+            )),
+        };
         let l_partkey: ArrayRef = match self.column_type_config.partkey_type {
             KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(rows.iter().map(|row| {
                 i32::try_from(row.l_partkey).expect("key exceeds resolved Int32 range")
@@ -214,7 +221,7 @@ impl Iterator for LineItemArrow {
         let batch = RecordBatch::try_new(
             Arc::clone(self.schema()),
             vec![
-                Arc::new(l_orderkey),
+                l_orderkey,
                 l_partkey,
                 l_suppkey,
                 Arc::new(l_linenumber),
@@ -239,6 +246,10 @@ impl Iterator for LineItemArrow {
 }
 
 fn make_lineitem_schema(config: &ColumnTypeConfig) -> SchemaRef {
+    let orderkey_type = match config.orderkey_type {
+        KeyColumnType::I32 => DataType::Int32,
+        KeyColumnType::I64 => DataType::Int64,
+    };
     let partkey_type = match config.partkey_type {
         KeyColumnType::I32 => DataType::Int32,
         KeyColumnType::I64 => DataType::Int64,
@@ -259,7 +270,7 @@ fn make_lineitem_schema(config: &ColumnTypeConfig) -> SchemaRef {
     };
 
     Arc::new(Schema::new(vec![
-        Field::new("l_orderkey", DataType::Int64, false),
+        Field::new("l_orderkey", orderkey_type, false),
         Field::new("l_partkey", partkey_type, false),
         Field::new("l_suppkey", suppkey_type, false),
         Field::new("l_linenumber", DataType::Int32, false),

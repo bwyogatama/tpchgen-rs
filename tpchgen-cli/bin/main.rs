@@ -223,6 +223,14 @@ struct Cli {
     #[arg(long, default_value = "i32")]
     suppkey_type: KeyColumnType,
 
+    /// Type to use for orderkey columns (o_orderkey, l_orderkey).
+    ///
+    /// Automatically widens i32 to i64 when the full sparse key range exceeds Int32.
+    ///
+    /// Valid values: i32 (default), i64
+    #[arg(long, default_value = "i32")]
+    orderkey_type: KeyColumnType,
+
     /// Parquet format version to write.
     ///
     /// Version 1 (default) has broader compatibility. Version 2 uses Data Page V2
@@ -397,6 +405,7 @@ impl Cli {
             custkey_type: self.custkey_type,
             partkey_type: self.partkey_type,
             suppkey_type: self.suppkey_type,
+            orderkey_type: self.orderkey_type,
         };
 
         // Convert column encoding overrides from Vec<(String, Encoding)> to HashMap

@@ -89,12 +89,14 @@ and foreign key in the same family across all tables and partitions:
 
 | Key family | Maximum key | First integer scale factor using `i64` |
 | ---------- | ----------- | ------------------------------------- |
+| `orderkey` | 32 × floor(N / 8) + (N mod 8), N = floor(1,500,000 × SF) | 358 |
 | `partkey` | floor(200,000 × SF) | 10,738 |
 | `custkey` | floor(150,000 × SF) | 14,317 |
 | `suppkey` | floor(10,000 × SF) | 214,749 |
 
-`orderkey` remains `i64`; `nationkey` and `regionkey` remain `i32` by default.
-The CLI options `--custkey-type`, `--partkey-type`, and `--suppkey-type` accept
+Order keys contain deliberate gaps; their maximum is larger than the order row
+count. `nationkey` and `regionkey` remain `i32` by default.
+The CLI options `--orderkey-type`, `--custkey-type`, `--partkey-type`, and `--suppkey-type` accept
 `i64` to request wider keys at smaller scales. Their default `i32` setting also
 widens automatically when needed. This behavior also applies to the Arrow API.
 

@@ -178,7 +178,6 @@ impl FromStr for KeyColumnType {
 /// otherwise. The choice uses the dataset's scale factor, so primary and foreign
 /// keys have matching types across tables, batches, and generator partitions.
 /// Explicit I32 requests also widen when necessary; I64 requests stay Int64.
-/// `l_orderkey` and `o_orderkey` are always Int64.
 ///
 /// # Example
 /// ```
@@ -192,6 +191,7 @@ impl FromStr for KeyColumnType {
 ///     custkey_type: KeyColumnType::I32,
 ///     partkey_type: KeyColumnType::I32,
 ///     suppkey_type: KeyColumnType::I32,
+///     orderkey_type: KeyColumnType::I32,
 /// };
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -210,12 +210,16 @@ pub struct ColumnTypeConfig {
     pub partkey_type: KeyColumnType,
     /// Type for suppkey columns (s_suppkey, ps_suppkey, l_suppkey)
     pub suppkey_type: KeyColumnType,
+    /// Type for orderkey columns (o_orderkey, l_orderkey)
+    pub orderkey_type: KeyColumnType,
 }
 
 impl ColumnTypeConfig {
     /// Resolve scalable keys against the entire dataset, not a single partition.
     fn for_scale_factor(mut self, scale_factor: f64) -> Self {
-        use tpchgen::generators::{CustomerGenerator, PartGenerator, SupplierGenerator};
+        use tpchgen::generators::{
+            CustomerGenerator, OrderGenerator, PartGenerator, SupplierGenerator,
+        };
 
         if CustomerGenerator::calculate_row_count(scale_factor, 1, 1) > i32::MAX as i64 {
             self.custkey_type = KeyColumnType::I64;
@@ -225,6 +229,13 @@ impl ColumnTypeConfig {
         }
         if SupplierGenerator::calculate_row_count(scale_factor, 1, 1) > i32::MAX as i64 {
             self.suppkey_type = KeyColumnType::I64;
+        }
+        // Order keys contain gaps, so their maximum can exceed the row count.
+        let order_count = OrderGenerator::calculate_row_count(scale_factor, 1, 1);
+        if order_count > i32::MAX as i64
+            || OrderGenerator::make_order_key(order_count) > i32::MAX as i64
+        {
+            self.orderkey_type = KeyColumnType::I64;
         }
         self
     }
@@ -250,6 +261,7 @@ pub trait RecordBatchIterator: Iterator<Item = RecordBatch> + Send {
     /// - custkey_type: Controls custkey columns (c_custkey, o_custkey)
     /// - partkey_type: Controls partkey columns (p_partkey, ps_partkey, l_partkey)
     /// - suppkey_type: Controls suppkey columns (s_suppkey, ps_suppkey, l_suppkey)
+    /// - orderkey_type: Controls orderkey columns (o_orderkey, l_orderkey)
     fn with_column_type_config(self, config: ColumnTypeConfig) -> Self
     where
         Self: Sized;
