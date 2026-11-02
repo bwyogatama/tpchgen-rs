@@ -102,6 +102,13 @@ smaller scales. These options are not exposed by `scripts/generate_tpch.py`.
 Their default `i32` setting widens automatically when needed. This behavior
 also applies to the Arrow API.
 
+At SF 30,000 and above, generating the same rows with different partition plans
+produces identical values. Random draws, unused draws at the end of each row,
+and partition skips all advance the same 64-bit sequence. This corrects legacy
+behavior and can change output compared with older versions and reference
+`dbgen` at these scales. Regenerate all tables together rather than mixing old
+and corrected data. The random sequence below SF 30,000 is preserved.
+
 The script writes each table into its own subdirectory as zero-indexed partition files:
 
 ```

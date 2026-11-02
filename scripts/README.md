@@ -34,6 +34,11 @@ By default, the script will produce output that differs from a default `tpchgen-
 4. We use Int32 identifiers where possible. Order, customer, part, and supplier keys automatically widen to Int64 when their full key range exceeds Int32; matching primary and foreign keys use the same width across tables and partitions. Order keys account for their deliberate gaps; nation and region keys default to Int32.
 5. Row Group and Partition sizes are optimized for GPUs. We target approximately 1,000,000 rows per row group and 100,000,000 rows per file.
 
+Both the wrapper and CLI use corrected 64-bit random-stream advancement at SF
+30,000 and above. This makes values independent of partition layout but changes
+legacy output. See the [generation compatibility note](../README.md#generating-data)
+before reusing an existing dataset.
+
 ## Output Metadata
 
 `scripts/generate_tpch.sh` generates a `metadata.json` at the root of the directory containing information about the generated tables.
