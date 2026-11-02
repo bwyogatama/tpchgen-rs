@@ -83,6 +83,21 @@ Key options:
 | `--use-timestamp-type` | Use `timestamp_ms` for date columns instead of `date32` | off |
 | `--use-large-ids` | Use `i64` for `nationkey`/`regionkey` instead of `i32` | off |
 
+Parquet join keys use `i32` while their full key range fits in 2,147,483,647,
+and automatically widen to `i64` otherwise. The choice applies to every primary
+and foreign key in the same family across all tables and partitions:
+
+| Key family | Maximum key | First integer scale factor using `i64` |
+| ---------- | ----------- | ------------------------------------- |
+| `partkey` | floor(200,000 × SF) | 10,738 |
+| `custkey` | floor(150,000 × SF) | 14,317 |
+| `suppkey` | floor(10,000 × SF) | 214,749 |
+
+`orderkey` remains `i64`; `nationkey` and `regionkey` remain `i32` by default.
+The CLI options `--custkey-type`, `--partkey-type`, and `--suppkey-type` accept
+`i64` to request wider keys at smaller scales. Their default `i32` setting also
+widens automatically when needed. This behavior also applies to the Arrow API.
+
 The script writes each table into its own subdirectory as zero-indexed partition files:
 
 ```

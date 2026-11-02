@@ -136,7 +136,7 @@ impl FromStr for DateColumnType {
 /// Type to use for key columns.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum KeyColumnType {
-    /// Use Int32 for key columns (default)
+    /// Prefer Int32, automatically widening to Int64 if the key range requires it (default)
     #[default]
     I32,
     /// Use Int64 for key columns
@@ -174,8 +174,11 @@ impl FromStr for KeyColumnType {
 /// - Date columns (order dates, ship dates, etc.)
 /// - Key columns (primary and foreign keys)
 ///
-/// By default all key columns use Int32, except `l_orderkey` and `o_orderkey`
-/// which are always Int64.
+/// By default key columns use Int32 when their full key range fits, and Int64
+/// otherwise. The choice uses the dataset's scale factor, so primary and foreign
+/// keys have matching types across tables, batches, and generator partitions.
+/// Explicit I32 requests also widen when necessary; I64 requests stay Int64.
+/// `l_orderkey` and `o_orderkey` are always Int64.
 ///
 /// # Example
 /// ```
@@ -209,6 +212,24 @@ pub struct ColumnTypeConfig {
     pub suppkey_type: KeyColumnType,
 }
 
+impl ColumnTypeConfig {
+    /// Resolve scalable keys against the entire dataset, not a single partition.
+    fn for_scale_factor(mut self, scale_factor: f64) -> Self {
+        use tpchgen::generators::{CustomerGenerator, PartGenerator, SupplierGenerator};
+
+        if CustomerGenerator::calculate_row_count(scale_factor, 1, 1) > i32::MAX as i64 {
+            self.custkey_type = KeyColumnType::I64;
+        }
+        if PartGenerator::calculate_row_count(scale_factor, 1, 1) > i32::MAX as i64 {
+            self.partkey_type = KeyColumnType::I64;
+        }
+        if SupplierGenerator::calculate_row_count(scale_factor, 1, 1) > i32::MAX as i64 {
+            self.suppkey_type = KeyColumnType::I64;
+        }
+        self
+    }
+}
+
 /// Iterator of Arrow [`RecordBatch`] that also knows its schema
 pub trait RecordBatchIterator: Iterator<Item = RecordBatch> + Send {
     fn schema(&self) -> &SchemaRef;
@@ -219,6 +240,7 @@ pub trait RecordBatchIterator: Iterator<Item = RecordBatch> + Send {
         Self: Sized;
 
     /// Set column type configuration to customize column types.
+    /// I32 key requests automatically widen to Int64 when required by the scale factor.
     ///
     /// This allows configuring types for categories of columns:
     /// - decimal_type: Controls monetary columns (c_acctbal, l_quantity, etc.)

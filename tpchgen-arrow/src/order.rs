@@ -53,6 +53,7 @@ use tpchgen::generators::{OrderGenerator, OrderGeneratorIterator};
 /// ```
 pub struct OrderArrow {
     inner: OrderGeneratorIterator<'static>,
+    scale_factor: f64,
     batch_size: usize,
     column_type_config: ColumnTypeConfig,
     /// Cached schema based on column_type_config
@@ -61,10 +62,12 @@ pub struct OrderArrow {
 
 impl OrderArrow {
     pub fn new(generator: OrderGenerator<'static>) -> Self {
-        let column_type_config = ColumnTypeConfig::default();
+        let scale_factor = generator.scale_factor();
+        let column_type_config = ColumnTypeConfig::default().for_scale_factor(scale_factor);
         let schema = make_order_schema(&column_type_config);
         Self {
             inner: generator.iter(),
+            scale_factor,
             batch_size: DEFAULT_BATCH_SIZE,
             column_type_config,
             schema,
@@ -89,6 +92,7 @@ impl RecordBatchIterator for OrderArrow {
     }
 
     fn with_column_type_config(mut self, config: ColumnTypeConfig) -> Self {
+        let config = config.for_scale_factor(self.scale_factor);
         self.schema = make_order_schema(&config);
         self.column_type_config = config;
         self
@@ -107,9 +111,11 @@ impl Iterator for OrderArrow {
 
         let o_orderkey = Int64Array::from_iter_values(rows.iter().map(|r| r.o_orderkey as i64));
         let o_custkey: ArrayRef = match self.column_type_config.custkey_type {
-            KeyColumnType::I32 => Arc::new(Int32Array::from_iter_values(
-                rows.iter().map(|r| r.o_custkey as i32),
-            )),
+            KeyColumnType::I32 => {
+                Arc::new(Int32Array::from_iter_values(rows.iter().map(|r| {
+                    i32::try_from(r.o_custkey).expect("key exceeds resolved Int32 range")
+                })))
+            }
             KeyColumnType::I64 => Arc::new(Int64Array::from_iter_values(
                 rows.iter().map(|r| r.o_custkey as i64),
             )),

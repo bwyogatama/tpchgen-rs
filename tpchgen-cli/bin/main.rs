@@ -197,6 +197,8 @@ struct Cli {
     ///
     /// Controls the Arrow type for: c_custkey, o_custkey
     ///
+    /// Automatically widens i32 to i64 when the full key range exceeds Int32.
+    ///
     /// Valid values: i32 (default), i64
     #[arg(long, default_value = "i32")]
     custkey_type: KeyColumnType,
@@ -205,6 +207,8 @@ struct Cli {
     ///
     /// Controls the Arrow type for: p_partkey, ps_partkey, l_partkey
     ///
+    /// Automatically widens i32 to i64 when the full key range exceeds Int32.
+    ///
     /// Valid values: i32 (default), i64
     #[arg(long, default_value = "i32")]
     partkey_type: KeyColumnType,
@@ -212,6 +216,8 @@ struct Cli {
     /// Type to use for suppkey columns.
     ///
     /// Controls the Arrow type for: s_suppkey, ps_suppkey, l_suppkey
+    ///
+    /// Automatically widens i32 to i64 when the full key range exceeds Int32.
     ///
     /// Valid values: i32 (default), i64
     #[arg(long, default_value = "i32")]

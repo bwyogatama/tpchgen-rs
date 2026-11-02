@@ -136,7 +136,10 @@ impl RowRandomLong {
 
     /// Instantiates a new seed for the next random value.
     fn next_rand(&mut self) -> i64 {
-        self.seed = (self.seed.wrapping_mul(Self::MULTIPLIER)) + Self::INCREMENT;
+        self.seed = self
+            .seed
+            .wrapping_mul(Self::MULTIPLIER)
+            .wrapping_add(Self::INCREMENT);
         self.usage += 1;
         self.seed
     }
@@ -166,7 +169,8 @@ impl RowRandomLong {
 
         while count > 0 {
             if count % 2 != 0 {
-                self.seed = (multiplier * self.seed) % Self::MODULUS_32;
+                // The 64-bit RNG seed can exceed Int32; preserve release-mode wrapping.
+                self.seed = multiplier.wrapping_mul(self.seed) % Self::MODULUS_32;
             }
 
             // Integer division, truncates
