@@ -356,3 +356,45 @@ fn foreign_keys_remain_positive_and_preserve_values_above_int32() {
             .all(|&key| key >= 1 && key as i64 <= max_supplier)
     );
 }
+
+#[test]
+fn partsupp_preserves_part_and_supplier_keys_above_int32() {
+    let generator = PartSuppGenerator::new(300_000.0, 100_000_000, 2_000_000_000);
+    let expected: Vec<_> = generator.clone().iter().take(16).collect();
+    let batch = PartSuppArrow::new(generator)
+        .with_batch_size(16)
+        .next()
+        .unwrap();
+    let parts = batch
+        .column(0)
+        .as_any()
+        .downcast_ref::<Int64Array>()
+        .unwrap();
+    let suppliers = batch
+        .column(1)
+        .as_any()
+        .downcast_ref::<Int64Array>()
+        .unwrap();
+    assert!(expected.iter().any(|row| row.ps_partkey > i32::MAX as i64));
+    assert!(expected.iter().any(|row| row.ps_suppkey > i32::MAX as i64));
+    for (index, row) in expected.iter().enumerate() {
+        assert_eq!(parts.value(index), row.ps_partkey);
+        assert_eq!(suppliers.value(index), row.ps_suppkey);
+    }
+
+    let generator = LineItemGenerator::new(300_000.0, 1, 1);
+    let expected: Vec<_> = generator.clone().iter().take(64).collect();
+    let batch = LineItemArrow::new(generator)
+        .with_batch_size(64)
+        .next()
+        .unwrap();
+    let suppliers = batch
+        .column(2)
+        .as_any()
+        .downcast_ref::<Int64Array>()
+        .unwrap();
+    assert!(expected.iter().any(|row| row.l_suppkey > i32::MAX as i64));
+    for (index, row) in expected.iter().enumerate() {
+        assert_eq!(suppliers.value(index), row.l_suppkey);
+    }
+}

@@ -57,6 +57,13 @@ impl RowRandomInt {
         lower_bound + value
     }
 
+    /// Sample a 64-bit interval using the reference 32-bit random stream.
+    fn next_long(&mut self, lower_bound: i64, upper_bound: i64) -> i64 {
+        self.next_rand();
+        let range = (upper_bound - lower_bound + 1) as f64;
+        lower_bound + ((self.seed as f64 / Self::MODULUS as f64) * range) as i64
+    }
+
     /// Instantiates a new seed for the next random value.
     pub fn next_rand(&mut self) -> i64 {
         self.seed = (self.seed * Self::MULTIPLIER) % Self::MODULUS;
@@ -277,7 +284,7 @@ impl RandomBoundedLong {
                 .next_long(self.lower_bound, self.upper_bound)
         } else {
             self.random_int
-                .next_int(self.lower_bound as i32, self.upper_bound as i32) as i64
+                .next_long(self.lower_bound, self.upper_bound)
         }
     }
 
@@ -634,6 +641,15 @@ impl<'a> RandomText<'a> {
 mod test {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn wide_bounds_preserve_reference_32bit_random_stream() {
+        let mut random = RowRandomInt::new(1808217256, 1);
+        for expected in [3103786886, 1346181591, 1273995516, 42629889] {
+            assert_eq!(random.next_long(1, 4_000_000_000), expected);
+            random.row_finished();
+        }
+    }
     #[test]
     fn test_small_random_alpha_numeric() {
         RandomAlphaNumericTest {

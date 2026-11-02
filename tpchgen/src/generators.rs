@@ -1655,12 +1655,8 @@ impl<'a> OrderGeneratorIterator<'a> {
 
         let max_customer_key = (CustomerGenerator::SCALE_BASE as f64 * scale_factor) as i64;
 
-        let mut customer_key_random = RandomBoundedLong::new(
-            851767375,
-            scale_factor >= 30000.0 || max_customer_key > i32::MAX as i64,
-            1,
-            max_customer_key,
-        );
+        let mut customer_key_random =
+            RandomBoundedLong::new(851767375, scale_factor >= 30000.0, 1, max_customer_key);
 
         let mut order_priority_random =
             RandomString::new(591449447, distributions.order_priority());
@@ -1999,10 +1995,10 @@ impl<'a> LineItemGenerator<'a> {
     /// Creates a part key random generator
     pub fn create_part_key_random(scale_factor: f64) -> RandomBoundedLong {
         let max_part_key = (PartGenerator::SCALE_BASE as f64 * scale_factor) as i64;
-        // Preserve the dbgen RNG choice, but switch earlier if Int32 would overflow.
+        // Preserve dbgen's random stream; either stream can sample 64-bit key bounds.
         RandomBoundedLong::new_with_seeds_per_row(
             1808217256,
-            scale_factor >= 30000.0 || max_part_key > i32::MAX as i64,
+            scale_factor >= 30000.0,
             Self::PART_KEY_MIN as i64,
             max_part_key,
             OrderGenerator::LINE_COUNT_MAX,

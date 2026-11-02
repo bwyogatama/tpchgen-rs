@@ -96,9 +96,11 @@ and foreign key in the same family across all tables and partitions:
 
 Order keys contain deliberate gaps; their maximum is larger than the order row
 count. `nationkey` and `regionkey` remain `i32` by default.
-The CLI options `--orderkey-type`, `--custkey-type`, `--partkey-type`, and `--suppkey-type` accept
-`i64` to request wider keys at smaller scales. Their default `i32` setting also
-widens automatically when needed. This behavior also applies to the Arrow API.
+The `tpchgen-cli` binary accepts `--orderkey-type`, `--custkey-type`,
+`--partkey-type`, and `--suppkey-type` with `i64` to request wider keys at
+smaller scales. These options are not exposed by `scripts/generate_tpch.py`.
+Their default `i32` setting widens automatically when needed. This behavior
+also applies to the Arrow API.
 
 The script writes each table into its own subdirectory as zero-indexed partition files:
 
